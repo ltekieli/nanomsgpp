@@ -208,8 +208,8 @@ TEST_F(socket_send_receive_test, throws_when_send_return_minus_one)
 TEST_F(socket_send_receive_test, receives_message)
 {
   EXPECT_CALL(nanomsg, nn_recv(1, _, NN_MSG, 0)).WillOnce(Return(5));
-  auto&& message = socket->receive<message_mock>();
-  ASSERT_THAT(message.m_length, Eq(5));
+  auto message = socket->receive<message_mock>();
+  ASSERT_THAT(message->m_length, Eq(5));
 }
 
 TEST_F(socket_send_receive_test, throws_when_recv_return_minus_one)
@@ -228,9 +228,9 @@ TEST_F(socket_send_receive_test, received_message_has_payload)
 {
   EXPECT_CALL(nanomsg, nn_recv(1, _, NN_MSG, 0))
       .WillOnce(DoAll(SetArgVoidPointer(data), Return(5)));
-  auto&& message = socket->receive<message_mock>();
-  ASSERT_THAT(message.m_length, Eq(5));
-  ASSERT_THAT(message.m_message, Eq(data));
+  auto message = socket->receive<message_mock>();
+  ASSERT_THAT(message->m_length, Eq(5));
+  ASSERT_THAT(message->m_message, Eq(data));
 }
 
 ACTION_P(SetArgVoidPointee, p)
@@ -288,14 +288,13 @@ TEST_F(async_socket_test, async_send_stores_handler)
   async_dispatcher_mock::handler handler;
   const async_dispatcher_mock& nsm = asocket->get_async_dispatcher();
   EXPECT_CALL(nsm, on_send_event(_)).WillOnce(SaveArg<0>(&handler));
-  message_mock msg;
+  auto msg{std::make_unique<message_mock>()};
 
   static constexpr size_t length = 5;
   char data[length] = {1, 2, 3, 4, 5};
-  EXPECT_CALL(msg, valid()).WillOnce(Return(true));
-  EXPECT_CALL(msg, size()).WillOnce(Return(length));
-  EXPECT_CALL(msg, release()).WillOnce(Return(data));
-  asocket->async_send(msg, [](const std::error_code&, size_t) {});
+  EXPECT_CALL(*msg, valid()).WillOnce(Return(true));
+  EXPECT_CALL(*msg, release()).WillOnce(Return(data));
+  asocket->async_send(std::move(msg), [](const std::error_code&, size_t) {});
 
   EXPECT_CALL(nanomsg, nn_send(1, _, NN_MSG, 0)).WillOnce(Return(1));
   handler(std::error_code());

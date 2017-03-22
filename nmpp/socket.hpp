@@ -75,12 +75,12 @@ public:
     send(msg.release());
   }
 
-  template <typename message_type> message_type receive() throw(exception)
+  template <typename message_type> auto receive() throw(exception)
   {
     char* buf = nullptr;
     size_t bytes_received = nn_recv(m_sock, &buf, NN_MSG, 0);
     throw_when(bytes_received == -1);
-    return {bytes_received, buf};
+    return message_type::from_nn(buf, bytes_received);
   }
 
 protected:
@@ -141,17 +141,13 @@ public:
   }
 
   template <typename message_type, typename handler_type>
-  void async_send(message_type&& msg, handler_type&& handler)
+  void async_send(std::unique_ptr<message_type> msg, handler_type&& handler)
   {
-    throw_when<std::logic_error>(!msg.valid(), "Invalid message");
-    auto msg_ptr =
-        std::make_shared<typename std::remove_reference<message_type>::type>(
-            msg.size(), msg.release());
-
+    throw_when<std::logic_error>(!msg->valid(), "Invalid message");
+    std::shared_ptr<message_type> shared_msg(std::move(msg));
     async_dispatcher.on_send_event(
-        [this, handler, msg_ptr](const std::error_code& ec) {
-          auto buf = msg_ptr->release();
-          auto bytes = send(buf);
+        [this, handler, shared_msg](const std::error_code& ec) {
+          auto bytes = send(shared_msg->release());
           handler(ec, bytes);
         });
   }
@@ -162,7 +158,7 @@ public:
     async_dispatcher.on_receive_event(
         [this, handler](const std::error_code& ec) {
           auto&& msg = receive<message_type>();
-          handler(msg);
+          handler(*msg);
         });
   }
 

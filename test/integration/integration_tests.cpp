@@ -27,11 +27,11 @@ void send_handler(nmpp::async_socket& socket, const std::error_code ec,
                   size_t bytes)
 {
   auto data = random_string(31);
-  nmpp::message msg(data.size() + 1);
-  msg.fill(data.c_str());
-  socket.async_send(msg, [&socket](const std::error_code ec, size_t bytes) {
-    send_handler(socket, ec, bytes);
-  });
+  auto msg = nmpp::message::from(data.c_str(), data.size() + 1);
+  socket.async_send(std::move(msg),
+                    [&socket](const std::error_code ec, size_t bytes) {
+                      send_handler(socket, ec, bytes);
+                    });
 }
 
 void receive_handler(nmpp::async_socket& socket, const nmpp::message& msg)
@@ -51,10 +51,9 @@ TEST(integration_test, create_socket)
   push_socket.connect("tcp://127.0.0.1:5555");
 
   auto data = random_string(31);
-  nmpp::message msg(data.size() + 1);
-  msg.fill(data.c_str());
+  auto msg = nmpp::message::from(data.c_str(), data.size() + 1);
   push_socket.async_send(
-      msg, [&push_socket](const std::error_code ec, size_t bytes) {
+      std::move(msg), [&push_socket](const std::error_code ec, size_t bytes) {
         send_handler(push_socket, ec, bytes);
       });
 
